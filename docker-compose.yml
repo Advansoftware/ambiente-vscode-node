@@ -1,0 +1,96 @@
+version: '3.1'
+
+services:
+
+  server-data-base:
+    container_name: data-base-amocupons
+    build: infra/data-base/mysql-8.0.32
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./Project/.docker/dbdata:/var/lib/mysql
+    environment:
+     MYSQL_DATABASE: amo_cupons_api
+     MYSQL_ROOT_PASSWORD: amocupons
+     MYSQL_USER: amocupons
+     MYSQL_PASSWORD: amocupons
+
+  phpmyadmin:
+    container_name: phpmyadmin-amocupons
+    image: phpmyadmin
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=server-data-base
+      - PMA_USER=root
+      - PMA_PASSWORD=amocupons
+    depends_on:
+      - server-data-base
+      
+  server-api:
+    container_name: web-server-api-amocupons
+    build: infra/api-server/node
+    entrypoint: "/usr/local/bin/node-entrypoint.sh"
+    ports:
+      - "1337:1337"
+    env_file:
+      - Project/amocuponsbackend/.env
+    volumes:
+      - ./Project/amocuponsbackend:/app
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      - server-data-base
+
+  server-admin:
+    container_name: web-server-amocupons-admin
+    build: infra/web-server/node
+    entrypoint: "/usr/local/bin/node-entrypoint.sh"
+    tty: true
+    volumes:
+      - ./Project/amocupons-admin:/app
+    working_dir: /app
+    ports:
+      - '3001:3001'
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - server-api
+
+  server-front:
+    container_name: web-server-amocupons-front
+    build: infra/web-server-front/node
+    entrypoint: "/usr/local/bin/node-entrypoint.sh"
+    tty: true
+    volumes:
+      - ./Project/amocupons-frontend:/app
+    working_dir: /app
+    ports:
+      - '3000:3000'
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - server-api
+
+  code-server:
+    container_name: vs-code-amocupons
+    build: infra/code-server
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - PASSWORD=123456 #optional
+      #- HASHED_PASSWORD= #optional
+      - SUDO_PASSWORD=123456 #optional
+      - SUDO_PASSWORD_HASH= #optional
+      #- PROXY_DOMAIN=code-server.my.domain #optional
+      - DEFAULT_WORKSPACE=/config #optional
+    volumes:
+       - ./Project:/config
+    ports:
+      - 8443:8443
+    restart: unless-stopped
+    depends_on:
+      - server-data-base
